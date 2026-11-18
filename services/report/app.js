@@ -23,8 +23,31 @@ async function printReport() {
       }
 }
 
-async function consume() {
-    //TODO: Constuir a comunicação com a fila 
-} 
 
-consume()
+async function consume() {
+    const queueName = process.env.RABBITMQ_QUEUE_NAME;
+    const rabbitMQ = await RabbitMQService.getInstance();
+
+    await rabbitMQ.consume(queueName, async (message) => {
+        if (!message) return;
+
+        try {
+            // Converte o conteúdo da mensagem em um objeto JavaScript.
+            const order = JSON.parse(message.content.toString('utf8'));
+
+            if (!Array.isArray(order?.products)) {
+                throw new Error('A mensagem precisa conter uma lista de produtos.');
+            }
+
+            await updateReport(order.products);
+            await printReport();
+        } catch (error) {
+            console.error('Erro ao processar pedido:', error.message);
+        }
+    });
+}
+
+consume().catch((error) => {
+    console.error('Erro ao iniciar o serviço de relatórios:', error.message);
+    process.exitCode = 1;
+});
